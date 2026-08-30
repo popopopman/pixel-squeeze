@@ -16,6 +16,8 @@ const formats: { value: Format; label: string; extension: string }[] = [
   { value: "image/png", label: "PNG", extension: "png" },
 ];
 
+// 公開先ごとに必要な完成サイズをここへ固定値として集約する。
+// 外部サービスの仕様は変わり得るため、変更時はこの一覧とテスト対象の UI を一緒に見直す。
 const templates = [
   { id: "instagram-feed", label: "Instagram", detail: "縦型フィード", width: 1080, height: 1350 },
   { id: "instagram-story", label: "Instagram", detail: "ストーリーズ", width: 1080, height: 1920 },
@@ -24,6 +26,7 @@ const templates = [
   { id: "youtube-thumb", label: "YouTube", detail: "サムネイル", width: 1280, height: 720 },
 ] as const;
 
+// テンプレートを選ばない場合だけ使う、手動トリミング用の比率一覧。
 const aspectOptions = [
   { label: "自由", ratio: undefined },
   { label: "1:1", ratio: 1 },
@@ -31,7 +34,12 @@ const aspectOptions = [
   { label: "16:9", ratio: 16 / 9 },
   { label: "9:16", ratio: 9 / 16 },
 ];
+// 0 は「リサイズしない」を表す。画像を拡大しない判定は outputDimensions 側で担保する。
 const longestOptions = [0, 2560, 1920, 1280, 800];
+
+// GitHub Actions がビルド時に NEXT_PUBLIC_GIT_SHA へデプロイ対象の SHA を注入する。
+// Next.js の public 環境変数は静的出力へ埋め込まれるため、公開ページのバーコードは
+// 実際に配信されたリビジョンを表す。ローカル開発時だけ判別用の値へフォールバックする。
 const barcodeValue = `GIT-${process.env.NEXT_PUBLIC_GIT_SHA?.slice(0, 12) ?? "LOCAL-DEV"}`;
 
 const choice =
@@ -67,6 +75,10 @@ function Barcode() {
 
   useEffect(() => {
     if (!svgRef.current) return;
+
+    // JsBarcode は対象 SVG の子要素を直接生成するため、React が内容を管理しない空の SVG を渡す。
+    // CODE128 は英数字とハイフンをそのまま扱えるので、Git の短縮 SHA を示す用途に適している。
+    // 文字列は SVG の下にも表示するため、displayValue は無効にして重複を避ける。
     JsBarcode(svgRef.current, barcodeValue, {
       background: "#ffffff",
       displayValue: false,
@@ -137,6 +149,7 @@ export default function ImageSqueezer() {
   const dragStart = useRef<{ x: number; y: number; focus: Focus } | null>(null);
   const reduceMotion = useReducedMotion();
 
+  // テンプレート優先: 選択中は登録済みの完成サイズ・比率を使い、未選択時は手動比率を使う。
   const selectedTemplate = templates.find((item) => item.id === templateId);
   const activeRatio = selectedTemplate
     ? selectedTemplate.width / selectedTemplate.height
@@ -145,11 +158,17 @@ export default function ImageSqueezer() {
     activeRatio ??
     (originalSize.width && originalSize.height ? originalSize.width / originalSize.height : 4 / 3);
 
+  // 入力画像か出力設定が変わるたびに、ブラウザ内 Canvas で次のプレビュー Blob を作る。
+  // 送信 API は使わず、この effect と Canvas API だけで完結させるため画像は端末外へ出ない。
   useEffect(() => {
     if (!file || !sourceUrl) return;
+    // Image.onload と canvas.toBlob は非同期。素早く設定を変えた場合に古い処理結果で
+    // 状態を上書きしないよう、cleanup でこの処理だけを無効化する。
     let cancelled = false;
     const image = new Image();
     image.onload = () => {
+      // 元画像上の切り抜き範囲と、完成画像のピクセル数を別々に決定する。
+      // テンプレートは必ず指定寸法、手動設定は長辺の上限に収める。
       const crop = cropRect(image.naturalWidth, image.naturalHeight, activeRatio, focus.x, focus.y);
       const dimensions = selectedTemplate
         ? { width: selectedTemplate.width, height: selectedTemplate.height }
@@ -163,6 +182,7 @@ export default function ImageSqueezer() {
         setMessage("このブラウザでは画像処理を開始できませんでした。");
         return;
       }
+      // JPEG は透明度を持てない。透明領域を黒くせず、白で塗ってから描画する。
       if (format === "image/jpeg") {
         context.fillStyle = "#ffffff";
         context.fillRect(0, 0, dimensions.width, dimensions.height);
@@ -178,6 +198,7 @@ export default function ImageSqueezer() {
         dimensions.width,
         dimensions.height,
       );
+      // toBlob の結果を Object URL にして img の src とダウンロードの両方に利用する。
       canvas.toBlob(
         (blob) => {
           if (cancelled) return;
@@ -188,6 +209,7 @@ export default function ImageSqueezer() {
           }
           const url = URL.createObjectURL(blob);
           setOutput((previous) => {
+            // 設定変更ごとに URL を作り直すので、前の Blob URL を即時解放してメモリを増やさない。
             if (previous) URL.revokeObjectURL(previous.url);
             return { blob, url, ...dimensions };
           });
@@ -209,6 +231,8 @@ export default function ImageSqueezer() {
     };
   }, [activeRatio, file, focus, format, longestSide, quality, selectedTemplate, sourceUrl]);
 
+  // ファイルの差し替えやコンポーネント破棄でも URL を解放する。
+  // ここで source と output を別々に扱うことで、プレビュー表示中の URL を早く消しすぎない。
   useEffect(
     () => () => {
       if (sourceUrl) URL.revokeObjectURL(sourceUrl);
@@ -227,11 +251,13 @@ export default function ImageSqueezer() {
   }
   function choose(nextFile?: File) {
     if (!nextFile) return;
+    // Canvas のエンコード対象を明示的に限定し、対応外形式は読み込み前に止める。
     if (!/image\/(jpeg|png|webp)/.test(nextFile.type)) {
       setStatus("error");
       setMessage("JPEG、PNG、WebPの画像を選択してください。");
       return;
     }
+    // 差し替え前の Object URL はもう参照されないので、次の URL を作る前に解放する。
     if (sourceUrl) URL.revokeObjectURL(sourceUrl);
     if (output) URL.revokeObjectURL(output.url);
     const url = URL.createObjectURL(nextFile);
@@ -242,12 +268,15 @@ export default function ImageSqueezer() {
     setSourceUrl(url);
     setStatus("processing");
     setMessage("");
+    // 変換 effect とは別に元の寸法を読む。これはファイル情報表示だけに使い、変換を待たせない。
     const probe = new Image();
     probe.onload = () =>
       setOriginalSize({ width: probe.naturalWidth, height: probe.naturalHeight });
     probe.src = url;
   }
   function remove() {
+    // UI 状態とネイティブ file input の値を両方リセットする。
+    // input.value も空にしないと、同じファイルを続けて選び直したときに change が発火しない。
     if (sourceUrl) URL.revokeObjectURL(sourceUrl);
     if (output) URL.revokeObjectURL(output.url);
     setFile(null);
@@ -262,6 +291,7 @@ export default function ImageSqueezer() {
     const next = templates.find((item) => item.id === id);
     if (!next || id === templateId) return;
     setTemplateId(id);
+    // 比率が変わるため、前の構図を引き継がず中央から再スタートする。
     setFocus({ x: 0.5, y: 0.5 });
     processing();
   }
@@ -274,6 +304,8 @@ export default function ImageSqueezer() {
   }
   function beginCrop(event: React.PointerEvent<HTMLDivElement>) {
     if (!file || !activeRatio) return;
+    // 開始地点と開始時の焦点をセットで保持し、移動量から絶対的な焦点を再計算する。
+    // Pointer Capture により、ポインターが枠外へ出てもドラッグ終了までイベントを受け取れる。
     dragStart.current = { x: event.clientX, y: event.clientY, focus };
     event.currentTarget.setPointerCapture(event.pointerId);
     setIsCropping(true);
@@ -282,6 +314,8 @@ export default function ImageSqueezer() {
     if (!dragStart.current) return;
     const bounds = event.currentTarget.getBoundingClientRect();
     setFocus({
+      // 画像を右へドラッグしたときは表示する画像の位置を左へずらすため、移動量を引く。
+      // clamp により、切り抜き範囲が元画像の外へ出ることはない。
       x: clamp(dragStart.current.focus.x - (event.clientX - dragStart.current.x) / bounds.width),
       y: clamp(dragStart.current.focus.y - (event.clientY - dragStart.current.y) / bounds.height),
     });
@@ -295,6 +329,7 @@ export default function ImageSqueezer() {
     if (!file || !output) return;
     const extension = formats.find((item) => item.value === format)?.extension ?? "webp";
     const base = file.name.replace(/\.[^.]+$/, "");
+    // テンプレート利用時は完成用途がファイル名からも分かるようにする。
     const suffix = selectedTemplate ? `-${selectedTemplate.id}` : "-squeezed";
     const link = document.createElement("a");
     link.href = output.url;
@@ -586,7 +621,7 @@ export default function ImageSqueezer() {
           transition={{ duration: 0.42, delay: 0.16 }}
         >
           <PanelTitle index="PRESET" title="用途を選ぶ">
-            <p className="ml-auto hidden text-[0.67rem] font-bold tracking-[0.1em] text-[#1010ee] sm:block">
+            <p className="ml-auto hidden text-[0.67rem] font-bold tracking-[0.1em] text-[#ec00e8] sm:block">
               SIZE + ASPECT / ONE CLICK
             </p>
           </PanelTitle>
