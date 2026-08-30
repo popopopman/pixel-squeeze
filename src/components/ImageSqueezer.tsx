@@ -2,6 +2,7 @@
 /* eslint-disable @next/next/no-img-element -- Object URLs are local, user-selected browser files. */
 
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import JsBarcode from "jsbarcode";
 import { type ChangeEvent, useEffect, useRef, useState } from "react";
 import { cropRect, formatBytes, outputDimensions } from "@/lib/image";
 
@@ -31,8 +32,7 @@ const aspectOptions = [
   { label: "9:16", ratio: 9 / 16 },
 ];
 const longestOptions = [0, 2560, 1920, 1280, 800];
-const barcodePattern =
-  "101100110100101011001010100110110010101101001101011010010110110010101001101011001";
+const barcodeValue = `GIT-${process.env.NEXT_PUBLIC_GIT_SHA?.slice(0, 12) ?? "LOCAL-DEV"}`;
 
 const choice =
   "min-h-8 border border-[#aebcff] px-2 text-[0.68rem] font-semibold text-[#1010ee] transition-colors hover:border-[#1010ee] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1010ee]";
@@ -63,33 +63,31 @@ function Icon({ name }: { name: "mark" | "upload" | "download" | "close" | "crop
 }
 
 function Barcode() {
+  const svgRef = useRef<SVGSVGElement>(null);
+
+  useEffect(() => {
+    if (!svgRef.current) return;
+    JsBarcode(svgRef.current, barcodeValue, {
+      background: "#ffffff",
+      displayValue: false,
+      format: "CODE128",
+      height: 34,
+      lineColor: "#1010ee",
+      margin: 0,
+      width: 1.25,
+    });
+  }, []);
+
   return (
     <figure className="m-0 hidden border border-[#1010ee] p-1.5 text-[#1010ee] sm:block">
       <svg
-        className="h-9 w-36"
-        viewBox="0 0 180 46"
+        ref={svgRef}
+        className="block w-[190px] max-w-full"
         role="img"
-        aria-label="Pixel Squeeze processing identification barcode"
-      >
-        <rect width="180" height="46" fill="white" />
-        {barcodePattern
-          .split("")
-          .map(
-            (bar, index) =>
-              bar === "1" && (
-                <rect
-                  key={index}
-                  x={index * 2 + 8}
-                  y={index % 5 === 0 ? 2 : 6}
-                  width="1.4"
-                  height={index % 5 === 0 ? 38 : 30}
-                  fill="currentColor"
-                />
-              ),
-          )}
-      </svg>
+        aria-label={`Code 128 barcode: ${barcodeValue}`}
+      />
       <figcaption className="mt-0.5 text-center text-[0.49rem] font-bold tracking-[0.15em]">
-        PX-0001-LOCAL
+        {barcodeValue}
       </figcaption>
     </figure>
   );
@@ -597,12 +595,12 @@ export default function ImageSqueezer() {
               <button
                 type="button"
                 key={item.id}
-                className={`grid min-h-[106px] content-between gap-2 border-b border-r border-[#aebcff] p-3 text-left transition-colors hover:bg-[#f1f2ff] focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[#1010ee] sm:[&:nth-child(3n)]:border-r-0 lg:border-b-0 lg:[&:nth-child(3n)]:border-r lg:[&:nth-child(5n)]:border-r-0 ${templateId === item.id ? "bg-[#1010ee] text-white hover:bg-[#0808c8]" : "text-[#1010ee]"}`}
+                className={`grid min-h-[106px] content-between gap-2 border-b border-r border-[#aebcff] p-3 text-left transition-colors focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[#1010ee] sm:[&:nth-child(3n)]:border-r-0 lg:border-b-0 lg:[&:nth-child(3n)]:border-r lg:[&:nth-child(5n)]:border-r-0 ${templateId === item.id ? "!bg-[#1010ee] !text-white hover:!bg-[#0808c8]" : "bg-[#eef0ff] text-[#1010ee] hover:bg-[#e3e6ff]"}`}
                 onClick={() => selectTemplate(item.id)}
               >
                 <strong className="text-[0.78rem] font-extrabold">{item.label}</strong>
                 <span className="text-[0.68rem] font-medium">{item.detail}</span>
-                <small className={templateId === item.id ? "text-[#dfdfff]" : "text-[#1010ee]"}>
+                <small className={templateId === item.id ? "!text-[#dfdfff]" : "text-[#1010ee]"}>
                   {item.width} × {item.height}
                 </small>
               </button>
