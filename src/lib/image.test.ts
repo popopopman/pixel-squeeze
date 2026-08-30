@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatBytes, outputDimensions } from "./image";
+import { cropRect, formatBytes, outputDimensions } from "./image";
 
 describe("outputDimensions", () => {
   it("scales landscape images down while preserving their aspect ratio", () => {
@@ -48,5 +48,43 @@ describe("formatBytes", () => {
     [2.5 * 1024 ** 2, "2.50 MB"],
   ])("formats %d bytes as %s", (value, expected) => {
     expect(formatBytes(value)).toBe(expected);
+  });
+});
+
+describe("cropRect", () => {
+  it("keeps the entire image for a free crop", () => {
+    expect(cropRect(4000, 3000)).toEqual({ x: 0, y: 0, width: 4000, height: 3000 });
+  });
+
+  it("centres the crop on the axis that has extra image area", () => {
+    expect(cropRect(4000, 3000, 16 / 9)).toEqual({
+      x: 0,
+      y: 375,
+      width: 4000,
+      height: 2250,
+    });
+    expect(cropRect(4000, 3000, 1)).toEqual({
+      x: 500,
+      y: 0,
+      width: 3000,
+      height: 3000,
+    });
+  });
+
+  it("moves a crop towards the requested focus point and clamps it to the source", () => {
+    expect(cropRect(4000, 3000, 1, 0, 0)).toEqual({ x: 0, y: 0, width: 3000, height: 3000 });
+    expect(cropRect(4000, 3000, 1, 1, 1)).toEqual({
+      x: 1000,
+      y: 0,
+      width: 3000,
+      height: 3000,
+    });
+    expect(cropRect(4000, 3000, 1, -1, 2)).toEqual({ x: 0, y: 0, width: 3000, height: 3000 });
+  });
+
+  it("rejects an invalid crop ratio", () => {
+    expect(() => cropRect(100, 100, 0)).toThrow(RangeError);
+    expect(() => cropRect(100, 100, -1)).toThrow(RangeError);
+    expect(() => cropRect(100, 100, Number.NaN)).toThrow(RangeError);
   });
 });

@@ -8,6 +8,8 @@
 
 - JPEG / PNG / WebP の圧縮と形式変換
 - 画質と長辺サイズの調整
+- Instagram、X、LINE、YouTubeサムネイル用のワンクリック書き出しテンプレート
+- 1:1、4:5、16:9、9:16の比率固定クロップ。ドラッグまたはキーボード操作で位置を調整
 - 変換前後のプレビュー、ファイルサイズ、削減率の表示
 - キーボード・スクリーンリーダーを含む標準操作と、`prefers-reduced-motion` への対応
 - Motionによる控えめで保守しやすい画面遷移
@@ -47,7 +49,7 @@ docker compose --profile preview up --build preview
 - **ESLint 9 flat config**: Next.js Core Web Vitals と TypeScript ルールを適用
 - **Prettier**: フォーマットの唯一の基準。ESLintの整形ルールは `eslint-config-prettier` で無効化
 - **TypeScript**: `strict` とソース専用の `tsc --noEmit` をlint工程に含める（Next.js生成物はNext本体のビルド検査に任せる）
-- **Vitest**: 横長・縦長・正方形・拡大禁止・丸め・不正な寸法と容量表示を対象にした単体テスト
+- **Vitest**: 横長・縦長・正方形・拡大禁止・丸め・不正な寸法、容量表示、クロップ範囲と焦点位置を対象にした単体テスト
 - **GitHub Actions**: PRではフォーマット、lint、テスト、ビルドを確認。`main`へのpushでは同じ検査後にGitHub Pagesへ静的公開
 - **Dependabot**: npmパッケージとGitHub Actionsを週次で確認し、更新PRを作成
 
