@@ -2,7 +2,7 @@
 /* eslint-disable @next/next/no-img-element -- Object URLs are local, user-selected browser files. */
 
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { type ChangeEvent, type DragEvent, useEffect, useRef, useState } from "react";
+import { type ChangeEvent, useEffect, useRef, useState } from "react";
 import { cropRect, formatBytes, outputDimensions } from "@/lib/image";
 
 type Format = "image/webp" | "image/jpeg" | "image/png";
@@ -31,6 +31,12 @@ const aspectOptions = [
   { label: "9:16", ratio: 9 / 16 },
 ];
 const longestOptions = [0, 2560, 1920, 1280, 800];
+const barcodePattern =
+  "101100110100101011001010100110110010101101001101011010010110110010101001101011001";
+
+const choice =
+  "min-h-8 border border-[#aebcff] px-2 text-[0.68rem] font-semibold text-[#1010ee] transition-colors hover:border-[#1010ee] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1010ee]";
+const activeChoice = "border-[#1010ee] bg-[#1010ee] text-white hover:border-[#1010ee]";
 
 function Icon({ name }: { name: "mark" | "upload" | "download" | "close" | "crop" | "reset" }) {
   const paths = {
@@ -53,6 +59,61 @@ function Icon({ name }: { name: "mark" | "upload" | "download" | "close" | "crop
     >
       {paths[name]}
     </svg>
+  );
+}
+
+function Barcode() {
+  return (
+    <figure className="m-0 hidden border border-[#1010ee] p-1.5 text-[#1010ee] sm:block">
+      <svg
+        className="h-9 w-36"
+        viewBox="0 0 180 46"
+        role="img"
+        aria-label="Pixel Squeeze processing identification barcode"
+      >
+        <rect width="180" height="46" fill="white" />
+        {barcodePattern
+          .split("")
+          .map(
+            (bar, index) =>
+              bar === "1" && (
+                <rect
+                  key={index}
+                  x={index * 2 + 8}
+                  y={index % 5 === 0 ? 2 : 6}
+                  width="1.4"
+                  height={index % 5 === 0 ? 38 : 30}
+                  fill="currentColor"
+                />
+              ),
+          )}
+      </svg>
+      <figcaption className="mt-0.5 text-center text-[0.49rem] font-bold tracking-[0.15em]">
+        PX-0001-LOCAL
+      </figcaption>
+    </figure>
+  );
+}
+
+function PanelTitle({
+  index,
+  title,
+  children,
+}: {
+  index: string;
+  title: string;
+  children?: React.ReactNode;
+}) {
+  return (
+    <div className="mb-5 flex min-h-6 items-baseline gap-3">
+      <span className="text-[0.66rem] font-extrabold tracking-[0.14em] text-[#1010ee]">
+        {index}
+      </span>
+      <h2 className="m-0 text-[0.98rem] font-extrabold tracking-[-0.04em] text-[#1010ee]">
+        {title}
+      </h2>
+      {children}
+    </div>
   );
 }
 
@@ -166,7 +227,6 @@ export default function ImageSqueezer() {
   function processing() {
     if (file) setStatus("processing");
   }
-
   function choose(nextFile?: File) {
     if (!nextFile) return;
     if (!/image\/(jpeg|png|webp)/.test(nextFile.type)) {
@@ -189,7 +249,6 @@ export default function ImageSqueezer() {
       setOriginalSize({ width: probe.naturalWidth, height: probe.naturalHeight });
     probe.src = url;
   }
-
   function remove() {
     if (sourceUrl) URL.revokeObjectURL(sourceUrl);
     if (output) URL.revokeObjectURL(output.url);
@@ -201,7 +260,6 @@ export default function ImageSqueezer() {
     setMessage("");
     if (inputRef.current) inputRef.current.value = "";
   }
-
   function selectTemplate(id: string) {
     const next = templates.find((item) => item.id === id);
     if (!next || id === templateId) return;
@@ -209,7 +267,6 @@ export default function ImageSqueezer() {
     setFocus({ x: 0.5, y: 0.5 });
     processing();
   }
-
   function selectAspect(nextRatio: number | undefined) {
     if (nextRatio === activeRatio && !templateId) return;
     setTemplateId("");
@@ -217,22 +274,12 @@ export default function ImageSqueezer() {
     setFocus({ x: 0.5, y: 0.5 });
     processing();
   }
-
-  function onInput(event: ChangeEvent<HTMLInputElement>) {
-    choose(event.target.files?.[0]);
-  }
-  function onDrop(event: DragEvent<HTMLLabelElement>) {
-    event.preventDefault();
-    choose(event.dataTransfer.files[0]);
-  }
-
   function beginCrop(event: React.PointerEvent<HTMLDivElement>) {
     if (!file || !activeRatio) return;
     dragStart.current = { x: event.clientX, y: event.clientY, focus };
     event.currentTarget.setPointerCapture(event.pointerId);
     setIsCropping(true);
   }
-
   function moveCrop(event: React.PointerEvent<HTMLDivElement>) {
     if (!dragStart.current) return;
     const bounds = event.currentTarget.getBoundingClientRect();
@@ -242,12 +289,10 @@ export default function ImageSqueezer() {
     });
     processing();
   }
-
   function endCrop() {
     dragStart.current = null;
     setIsCropping(false);
   }
-
   function download() {
     if (!file || !output) return;
     const extension = formats.find((item) => item.value === format)?.extension ?? "webp";
@@ -260,74 +305,94 @@ export default function ImageSqueezer() {
   }
 
   const reduction = output && file ? Math.round((1 - output.blob.size / file.size) * 100) : null;
+  const statusLabel =
+    status === "ready"
+      ? "READY"
+      : status === "processing"
+        ? "PROCESSING"
+        : status === "error"
+          ? "ERROR"
+          : "STANDBY";
 
   return (
-    <main className="site-shell">
-      <nav className="topbar" aria-label="メインナビゲーション">
-        <a className="wordmark" href="#top">
-          <span>
-            <Icon name="mark" />
-          </span>
-          PIXEL SQUEEZE
-        </a>
-        <p>
-          <i />
-          LOCAL PROCESSING
-        </p>
-      </nav>
-
-      <header className="masthead" id="top">
-        <p className="kicker">IMAGE PREPARATION TOOL — 01</p>
-        <h1>
-          画像を、
-          <br />
-          <em>ちょうどよく。</em>
-        </h1>
-        <p className="intro">
-          圧縮、用途別サイズ、切り抜きまで。画像はあなたのブラウザから出ません。
-        </p>
+    <main className="min-w-80 bg-[#eef0ff] bg-[linear-gradient(rgba(16,16,238,0.11)_1px,transparent_1px),linear-gradient(90deg,rgba(16,16,238,0.11)_1px,transparent_1px)] font-['Noto_Sans_JP'] text-[#1010ee] antialiased [background-size:48px_48px]">
+      <header className="mx-auto w-[min(1220px,calc(100%_-_2.7rem))] border-b border-[#1010ee]">
+        <div className="flex min-h-[74px] items-center gap-4">
+          <a
+            className="inline-flex shrink-0 items-center gap-2 text-[0.8rem] font-extrabold tracking-[-0.04em] text-[#1010ee] no-underline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#1010ee]"
+            href="https://popopopman.github.io/"
+          >
+            <span className="grid size-9 place-items-center bg-[#1010ee] text-white">
+              <Icon name="mark" />
+            </span>
+            PIXEL SQUEEZE
+          </a>
+          <p className="m-0 hidden min-w-0 flex-1 text-[0.69rem] font-semibold tracking-[-0.03em] text-[#1010ee] lg:block">
+            Browser image preparation / local-only export system
+          </p>
+          <Barcode />
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-x-5 gap-y-1 border-t border-[#aebcff] py-2 text-[0.58rem] font-bold tracking-[0.1em] text-[#1010ee]">
+          <span>IMAGE PREPARATION TOOL / 01</span>
+          <span>JPEG · PNG · WEBP</span>
+          <span>CLIENT-SIDE PROCESSING</span>
+          <span className="text-[#ee00e8]">STATUS / {statusLabel}</span>
+        </div>
       </header>
 
-      <section className="workbench" aria-label="画像の変換とトリミング">
+      <section
+        className="mx-auto grid w-[min(1220px,calc(100%_-_2.7rem))] border-b border-[#1010ee] lg:grid-cols-[minmax(0,7fr)_minmax(360px,5fr)]"
+        aria-label="画像の変換とトリミング"
+      >
         <motion.section
-          className="image-station"
+          className="min-w-0 border-b border-[#aebcff] py-7 lg:border-r lg:py-9 lg:pr-9"
           initial={reduceMotion ? false : { opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.42 }}
         >
-          <div className="station-title">
-            <span>01</span>
-            <h2>画像を置く</h2>
+          <PanelTitle index="01" title="画像を置く">
             {file && (
-              <button type="button" className="plain-action" onClick={remove}>
+              <button
+                type="button"
+                className="ml-auto inline-flex items-center gap-1.5 border-b border-[#aebcff] pb-0.5 text-[0.68rem] font-bold text-[#1010ee] hover:border-[#1010ee] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1010ee]"
+                onClick={remove}
+              >
                 <Icon name="close" />
                 取り除く
               </button>
             )}
-          </div>
+          </PanelTitle>
           {!file ? (
             <label
-              className="drop-target"
+              className="grid min-h-[390px] cursor-pointer place-content-center justify-items-center gap-2.5 border border-dashed border-[#1010ee] bg-[#1010ee] bg-[linear-gradient(rgba(255,255,255,0.18)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.18)_1px,transparent_1px)] p-6 text-center [background-size:24px_24px] hover:bg-[#0808c8] focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-[#1010ee] sm:min-h-[430px]"
               onDragOver={(event) => event.preventDefault()}
-              onDrop={onDrop}
+              onDrop={(event) => {
+                event.preventDefault();
+                choose(event.dataTransfer.files[0]);
+              }}
             >
               <input
                 ref={inputRef}
+                className="sr-only"
                 type="file"
                 accept="image/jpeg,image/png,image/webp"
-                onChange={onInput}
+                onChange={(event: ChangeEvent<HTMLInputElement>) => choose(event.target.files?.[0])}
               />
-              <span className="drop-symbol">
+              <span className="grid size-12 place-items-center bg-white text-[#1010ee]">
                 <Icon name="upload" />
               </span>
-              <strong>画像をドラッグ＆ドロップ</strong>
-              <span>またはクリックして選択</span>
-              <small>JPEG / PNG / WebP　最大処理は端末内で行われます</small>
+              <strong className="mt-1 text-[0.96rem] font-extrabold tracking-[-0.04em] text-white">
+                画像をドラッグ＆ドロップ
+              </strong>
+              <span className="text-[0.76rem] font-medium text-white">またはクリックして選択</span>
+              <small className="mt-3 max-w-64 text-[0.63rem] leading-5 text-white">
+                MAX LOCAL PROCESSING / JPEG · PNG · WEBP
+              </small>
             </label>
           ) : (
-            <div className="crop-workspace">
+            <div className="min-h-[390px] sm:min-h-[430px]">
               <div
-                className={isCropping ? "crop-frame grabbing" : "crop-frame"}
+                className={`relative grid w-full max-h-[500px] touch-none place-items-center overflow-hidden bg-[#e9ebff] ${isCropping ? "cursor-grabbing" : "cursor-grab"}`}
                 style={{ aspectRatio: previewRatio }}
                 onPointerDown={beginCrop}
                 onPointerMove={moveCrop}
@@ -338,24 +403,35 @@ export default function ImageSqueezer() {
                   key={`${sourceUrl}-${activeRatio}`}
                   src={sourceUrl}
                   alt="切り抜き範囲のプレビュー"
+                  className="size-full select-none object-cover"
                   draggable={false}
                   style={{ objectPosition: `${focus.x * 100}% ${focus.y * 100}%` }}
                   initial={reduceMotion ? false : { opacity: 0.2, scale: 1.04 }}
                   animate={{ opacity: 1, scale: 1 }}
                   transition={{ duration: 0.24 }}
                 />
-                <span className="crop-lines" aria-hidden="true" />
+                <div
+                  className="pointer-events-none absolute inset-0 border border-white/80"
+                  aria-hidden="true"
+                >
+                  <span className="absolute inset-y-0 left-1/3 w-px bg-white/80" />
+                  <span className="absolute inset-y-0 left-2/3 w-px bg-white/80" />
+                  <span className="absolute inset-x-0 top-1/3 h-px bg-white/80" />
+                  <span className="absolute inset-x-0 top-2/3 h-px bg-white/80" />
+                </div>
                 {activeRatio && (
-                  <span className="crop-note">
+                  <span className="absolute bottom-3 right-3 inline-flex items-center gap-1.5 bg-[#1010ee] px-2 py-1.5 text-[0.62rem] font-bold text-white">
                     <Icon name="crop" />
-                    ドラッグで位置を調整
+                    DRAG TO POSITION
                   </span>
                 )}
               </div>
-              <div className="file-line">
-                <strong>{file.name}</strong>
-                <span>
-                  {originalSize.width} × {originalSize.height}　/　{formatBytes(file.size)}
+              <div className="flex justify-between gap-4 border-b border-[#aebcff] pt-3 text-[0.67rem] text-[#1010ee]">
+                <strong className="max-w-[55%] overflow-hidden pb-3 text-[0.72rem] font-bold text-[#1010ee] text-ellipsis whitespace-nowrap">
+                  {file.name}
+                </strong>
+                <span className="pb-3 whitespace-nowrap">
+                  {originalSize.width} × {originalSize.height} / {formatBytes(file.size)}
                 </span>
               </div>
             </div>
@@ -363,27 +439,22 @@ export default function ImageSqueezer() {
         </motion.section>
 
         <motion.aside
-          className="control-station"
+          className="min-w-0 border-b border-[#aebcff] py-7 lg:py-9 lg:pl-9"
           initial={reduceMotion ? false : { opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.42, delay: 0.08 }}
         >
-          <div className="station-title">
-            <span>02</span>
-            <h2>切り抜きと出力</h2>
-          </div>
-          <fieldset>
-            <legend>アスペクト比</legend>
-            <div className="ratio-list">
+          <PanelTitle index="02" title="切り抜きと出力" />
+          <fieldset className="m-0 border-0 border-t border-[#aebcff] py-4 first:border-t-0 first:pt-0">
+            <legend className="mb-3 text-[0.66rem] font-bold tracking-[0.08em] text-[#1010ee]">
+              アスペクト比
+            </legend>
+            <div className="flex flex-wrap gap-1.5">
               {aspectOptions.map((item) => (
                 <button
                   type="button"
                   key={item.label}
-                  className={
-                    !templateId && activeRatio === item.ratio
-                      ? "ratio-choice active"
-                      : "ratio-choice"
-                  }
+                  className={`${choice} ${!templateId && activeRatio === item.ratio ? activeChoice : ""}`}
                   onClick={() => selectAspect(item.ratio)}
                 >
                   {item.label}
@@ -392,11 +463,12 @@ export default function ImageSqueezer() {
             </div>
           </fieldset>
           {file && activeRatio && (
-            <fieldset className="position-control">
-              <legend>
+            <fieldset className="m-0 border-0 border-t border-[#aebcff] py-4">
+              <legend className="mb-3 flex items-center justify-between text-[0.66rem] font-bold tracking-[0.08em] text-[#1010ee]">
                 切り抜き位置{" "}
                 <button
                   type="button"
+                  className="inline-flex items-center gap-1 text-[0.65rem] font-bold text-[#ee00e8] hover:text-[#1010ee] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1010ee]"
                   onClick={() => {
                     setFocus({ x: 0.5, y: 0.5 });
                     processing();
@@ -407,9 +479,10 @@ export default function ImageSqueezer() {
                   中央へ
                 </button>
               </legend>
-              <label>
+              <label className="mt-2 grid grid-cols-[20px_1fr] items-center gap-2 text-[0.65rem] font-semibold text-[#1010ee]">
                 横
                 <input
+                  className="w-full accent-[#1010ee]"
                   type="range"
                   min="0"
                   max="100"
@@ -420,9 +493,10 @@ export default function ImageSqueezer() {
                   }}
                 />
               </label>
-              <label>
+              <label className="mt-2 grid grid-cols-[20px_1fr] items-center gap-2 text-[0.65rem] font-semibold text-[#1010ee]">
                 縦
                 <input
+                  className="w-full accent-[#1010ee]"
                   type="range"
                   min="0"
                   max="100"
@@ -435,14 +509,16 @@ export default function ImageSqueezer() {
               </label>
             </fieldset>
           )}
-          <fieldset>
-            <legend>ファイル形式</legend>
-            <div className="format-list">
+          <fieldset className="m-0 border-0 border-t border-[#aebcff] py-4">
+            <legend className="mb-3 text-[0.66rem] font-bold tracking-[0.08em] text-[#1010ee]">
+              ファイル形式
+            </legend>
+            <div className="flex flex-wrap">
               {formats.map((item) => (
                 <button
                   type="button"
                   key={item.value}
-                  className={format === item.value ? "format-choice active" : "format-choice"}
+                  className={`${choice} min-w-[70px] -mr-px ${format === item.value ? activeChoice : ""}`}
                   onClick={() => {
                     if (format !== item.value) {
                       setFormat(item.value);
@@ -455,17 +531,16 @@ export default function ImageSqueezer() {
               ))}
             </div>
           </fieldset>
-          <fieldset>
-            <legend>
-              画質 <output>{quality}</output>
+          <fieldset className="m-0 border-0 border-y border-[#aebcff] py-4">
+            <legend className="mb-3 flex justify-between text-[0.66rem] font-bold tracking-[0.08em] text-[#1010ee]">
+              画質 <output className="text-[#ee00e8]">{quality}</output>
             </legend>
             <input
-              className="quality-range"
+              className="w-full accent-[#1010ee]"
               type="range"
               min="35"
               max="100"
               value={quality}
-              style={{ ["--range-progress" as string]: `${((quality - 35) / 65) * 100}%` }}
               onChange={(event) => {
                 setQuality(Number(event.target.value));
                 processing();
@@ -473,14 +548,16 @@ export default function ImageSqueezer() {
             />
           </fieldset>
           {!selectedTemplate && (
-            <fieldset>
-              <legend>長辺の最大サイズ</legend>
-              <div className="size-list">
+            <fieldset className="m-0 border-0 border-b border-[#aebcff] py-4">
+              <legend className="mb-3 text-[0.66rem] font-bold tracking-[0.08em] text-[#1010ee]">
+                長辺の最大サイズ
+              </legend>
+              <div className="flex flex-wrap gap-1.5">
                 {longestOptions.map((size) => (
                   <button
                     type="button"
                     key={size}
-                    className={longestSide === size ? "size-choice active" : "size-choice"}
+                    className={`${choice} ${longestSide === size ? activeChoice : ""}`}
                     onClick={() => {
                       if (longestSide !== size) {
                         setLongestSide(size);
@@ -495,38 +572,37 @@ export default function ImageSqueezer() {
             </fieldset>
           )}
           {selectedTemplate && (
-            <p className="target-note">
-              このテンプレートは{" "}
-              <strong>
+            <p className="m-0 border-b border-[#aebcff] py-4 text-[0.73rem] leading-6 text-[#1010ee]">
+              TARGET OUTPUT /{" "}
+              <strong className="font-extrabold text-[#ee00e8]">
                 {selectedTemplate.width} × {selectedTemplate.height}px
-              </strong>{" "}
-              で書き出します。
+              </strong>
             </p>
           )}
         </motion.aside>
 
         <motion.section
-          className="template-station"
+          className="col-span-full border-b border-[#1010ee] py-7 lg:py-9"
           initial={reduceMotion ? false : { opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.42, delay: 0.16 }}
         >
-          <div className="station-title">
-            <span>PRESET</span>
-            <h2>用途を選ぶ</h2>
-            <p>選ぶだけで、サイズと比率を揃えます。</p>
-          </div>
-          <div className="template-list">
+          <PanelTitle index="PRESET" title="用途を選ぶ">
+            <p className="ml-auto hidden text-[0.67rem] font-bold tracking-[0.1em] text-[#1010ee] sm:block">
+              SIZE + ASPECT / ONE CLICK
+            </p>
+          </PanelTitle>
+          <div className="grid grid-cols-2 border border-[#aebcff] sm:grid-cols-3 lg:grid-cols-5">
             {templates.map((item) => (
               <button
                 type="button"
                 key={item.id}
-                className={templateId === item.id ? "template-choice active" : "template-choice"}
+                className={`grid min-h-[106px] content-between gap-2 border-b border-r border-[#aebcff] p-3 text-left transition-colors hover:bg-[#f1f2ff] focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[#1010ee] sm:[&:nth-child(3n)]:border-r-0 lg:border-b-0 lg:[&:nth-child(3n)]:border-r lg:[&:nth-child(5n)]:border-r-0 ${templateId === item.id ? "bg-[#1010ee] text-white hover:bg-[#0808c8]" : "text-[#1010ee]"}`}
                 onClick={() => selectTemplate(item.id)}
               >
-                <strong>{item.label}</strong>
-                <span>{item.detail}</span>
-                <small>
+                <strong className="text-[0.78rem] font-extrabold">{item.label}</strong>
+                <span className="text-[0.68rem] font-medium">{item.detail}</span>
+                <small className={templateId === item.id ? "text-[#dfdfff]" : "text-[#1010ee]"}>
                   {item.width} × {item.height}
                 </small>
               </button>
@@ -534,82 +610,116 @@ export default function ImageSqueezer() {
           </div>
         </motion.section>
 
-        <section className="result-station" aria-live="polite">
-          <div className="station-title">
-            <span>03</span>
-            <h2>書き出す</h2>
-            <i className={status} />
-          </div>
+        <section className="col-span-full py-7 lg:py-9" aria-live="polite">
+          <PanelTitle index="03" title="書き出す">
+            <span
+              className={`ml-auto size-2 ${status === "ready" ? "bg-[#1010ee]" : status === "error" ? "bg-[#ee00e8]" : "bg-[#aebcff]"}`}
+            />
+          </PanelTitle>
           <AnimatePresence mode="wait">
             {status === "idle" && (
               <motion.div
                 key="idle"
-                className="result-empty"
+                className="flex min-h-[130px] items-center gap-7 border-t border-[#aebcff] py-6"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
               >
-                <span>READY</span>
-                <p>画像を選ぶと、ここに最適化後の結果が届きます。</p>
+                <span className="min-w-[70px] text-[0.7rem] font-extrabold tracking-[0.14em] text-[#1010ee]">
+                  STANDBY
+                </span>
+                <p className="m-0 text-[0.8rem] leading-6 text-[#1010ee]">
+                  画像を選ぶと、ここに最適化後の結果が届きます。
+                </p>
               </motion.div>
             )}
             {status === "processing" && (
               <motion.div
                 key="processing"
-                className="result-empty"
+                className="flex min-h-[130px] items-center gap-7 border-t border-[#aebcff] py-6"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
               >
-                <span className="processing-rule" />
-                <p>処理しています。プレビューを作成中です。</p>
+                <motion.span
+                  className="block h-0.5 w-[70px] bg-[#ee00e8]"
+                  animate={reduceMotion ? undefined : { scaleX: [1, 0.25, 1] }}
+                  transition={{ duration: 1, repeat: Infinity, ease: "easeInOut" }}
+                />
+                <p className="m-0 text-[0.8rem] leading-6 text-[#1010ee]">
+                  処理しています。プレビューを作成中です。
+                </p>
               </motion.div>
             )}
             {status === "error" && (
               <motion.div
                 key="error"
-                className="result-empty error"
+                className="flex min-h-[130px] items-center gap-7 border-t border-[#aebcff] py-6"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
               >
-                <span>ERROR</span>
-                <p role="alert">{message}</p>
+                <span className="min-w-[70px] text-[0.7rem] font-extrabold tracking-[0.14em] text-[#ee00e8]">
+                  ERROR
+                </span>
+                <p className="m-0 text-[0.8rem] leading-6 text-[#1010ee]" role="alert">
+                  {message}
+                </p>
               </motion.div>
             )}
             {status === "ready" && output && (
               <motion.div
                 key="ready"
-                className="result-ready"
+                className="grid gap-4 border-t border-[#aebcff] pt-5 sm:grid-cols-[130px_minmax(0,1fr)_auto] sm:items-center sm:gap-7"
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0 }}
               >
-                <div className="export-preview">
-                  <img src={output.url} alt="変換後のプレビュー" />
+                <div className="h-[110px] overflow-hidden bg-[#e9ebff] sm:row-span-2">
+                  <img
+                    className="size-full object-cover"
+                    src={output.url}
+                    alt="変換後のプレビュー"
+                  />
                 </div>
-                <dl>
+                <dl className="m-0 flex flex-wrap gap-x-7 gap-y-3">
                   <div>
-                    <dt>サイズ</dt>
-                    <dd>{formatBytes(output.blob.size)}</dd>
+                    <dt className="mb-1 text-[0.59rem] font-bold tracking-[0.08em] text-[#1010ee]">
+                      SIZE
+                    </dt>
+                    <dd className="m-0 text-[0.76rem] font-extrabold text-[#1010ee]">
+                      {formatBytes(output.blob.size)}
+                    </dd>
                   </div>
                   <div>
-                    <dt>解像度</dt>
-                    <dd>
+                    <dt className="mb-1 text-[0.59rem] font-bold tracking-[0.08em] text-[#1010ee]">
+                      RESOLUTION
+                    </dt>
+                    <dd className="m-0 text-[0.76rem] font-extrabold text-[#1010ee]">
                       {output.width} × {output.height}
                     </dd>
                   </div>
                   <div>
-                    <dt>形式</dt>
-                    <dd>{format.split("/")[1].toUpperCase()}</dd>
+                    <dt className="mb-1 text-[0.59rem] font-bold tracking-[0.08em] text-[#1010ee]">
+                      FORMAT
+                    </dt>
+                    <dd className="m-0 text-[0.76rem] font-extrabold text-[#1010ee]">
+                      {format.split("/")[1].toUpperCase()}
+                    </dd>
                   </div>
                 </dl>
-                <p className={reduction && reduction > 0 ? "saving-line" : "saving-line neutral"}>
+                <p
+                  className={`m-0 text-[0.71rem] font-bold ${reduction && reduction > 0 ? "text-[#ee00e8]" : "text-[#1010ee]"}`}
+                >
                   {reduction && reduction > 0
                     ? `元の画像より ${reduction}% 軽くなりました。`
                     : "この設定で書き出せます。"}
                 </p>
-                <button type="button" className="download-button" onClick={download}>
+                <button
+                  type="button"
+                  className="inline-flex min-h-[51px] items-center justify-center gap-2 bg-[#1010ee] px-4 text-[0.76rem] font-extrabold text-white transition-colors hover:bg-[#0808c8] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1010ee] sm:col-start-3 sm:row-span-2"
+                  onClick={download}
+                >
                   <Icon name="download" />
                   ダウンロード
                 </button>
@@ -619,9 +729,8 @@ export default function ImageSqueezer() {
         </section>
       </section>
 
-      <footer>
-        <span>PIXEL SQUEEZE</span>
-        <p>NO UPLOADS. NO ACCOUNTS. JUST LOCAL PIXELS.</p>
+      <footer className="mt-7 bg-[#1010ee] bg-[linear-gradient(rgba(255,255,255,0.16)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.16)_1px,transparent_1px)] px-[max(1.35rem,calc((100%_-_1220px)/2))] py-5 text-[0.63rem] font-bold tracking-[0.1em] text-white [background-size:48px_48px]">
+        PIXEL SQUEEZE / NO UPLOADS / NO ACCOUNTS / LOCAL PIXELS
       </footer>
     </main>
   );
