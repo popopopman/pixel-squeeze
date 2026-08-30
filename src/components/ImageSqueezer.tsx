@@ -313,7 +313,7 @@ export default function ImageSqueezer() {
           : "STANDBY";
 
   return (
-    <main className="min-w-80 bg-[#eef0ff] bg-[linear-gradient(rgba(16,16,238,0.11)_1px,transparent_1px),linear-gradient(90deg,rgba(16,16,238,0.11)_1px,transparent_1px)] font-['Noto_Sans_JP'] text-[#1010ee] antialiased [background-size:48px_48px]">
+    <main className="min-w-80 bg-[#eef0ff] font-['Noto_Sans_JP'] text-[#1010ee] antialiased">
       <header className="mx-auto w-[min(1220px,calc(100%_-_2.7rem))] border-b border-[#1010ee]">
         <div className="flex min-h-[74px] items-center gap-4">
           <a
