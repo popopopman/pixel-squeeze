@@ -3,6 +3,7 @@
 
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import JsBarcode from "jsbarcode";
+import { FileDown } from "lucide-react";
 import { type ChangeEvent, useEffect, useRef, useState } from "react";
 import { cropRect, formatBytes, outputDimensions } from "@/lib/image";
 
@@ -46,13 +47,12 @@ const choice =
   "min-h-8 border border-[#aebcff] px-2 text-[0.68rem] font-semibold text-[#1010ee] transition-colors hover:border-[#1010ee] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1010ee]";
 const activeChoice = "border-[#1010ee] bg-[#1010ee] text-white hover:border-[#1010ee]";
 
-function Icon({ name }: { name: "mark" | "upload" | "download" | "close" | "crop" | "reset" }) {
+function Icon({ name }: { name: "mark" | "upload" | "close" | "crop" | "reset" }) {
   const paths = {
     mark: (
       <path d="M2 7.5 7.5 2 12 6.5 16.5 2 22 7.5 16.5 13 12 8.5 7.5 13 2 7.5Zm0 9 5.5-5.5L12 15.5l4.5-4.5L22 16.5 16.5 22 12 17.5 7.5 22 2 16.5Z" />
     ),
     upload: <path d="M12 16V3m0 0L7 8m5-5 5 5M4 14v6a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-6" />,
-    download: <path d="M12 3v13m0 0 5-5m-5 5-5-5M4 14v6a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-6" />,
     close: <path d="m6 6 12 12M18 6 6 18" />,
     crop: <path d="M7 3v11a3 3 0 0 0 3 3h11M17 21V10a3 3 0 0 0-3-3H3M7 3H3m4 0v4m10 10v4m0-4h4" />,
     reset: <path d="M4 9V4m0 0h5M4.7 4.7A8 8 0 1 1 4 15m0 0v5m0-5h5" />,
@@ -753,7 +753,11 @@ export default function ImageSqueezer() {
                   className="inline-flex min-h-[51px] items-center justify-center gap-2 bg-[#1010ee] px-4 text-[0.76rem] font-extrabold text-white transition-colors hover:bg-[#0808c8] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1010ee] sm:col-start-3 sm:row-span-2"
                   onClick={download}
                 >
-                  <Icon name="download" />
+                  <FileDown
+                    aria-hidden="true"
+                    className="size-[1.15rem] shrink-0"
+                    strokeWidth={2.25}
+                  />
                   ダウンロード
                 </button>
               </motion.div>
