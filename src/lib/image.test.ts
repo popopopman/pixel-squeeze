@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cropRect, formatBytes, outputDimensions } from "./image";
+import { cropMovement, cropRect, formatBytes, outputDimensions } from "./image";
 
 describe("outputDimensions", () => {
   it("scales landscape images down while preserving their aspect ratio", () => {
@@ -86,5 +86,16 @@ describe("cropRect", () => {
     expect(() => cropRect(100, 100, 0)).toThrow(RangeError);
     expect(() => cropRect(100, 100, -1)).toThrow(RangeError);
     expect(() => cropRect(100, 100, Number.NaN)).toThrow(RangeError);
+  });
+});
+
+describe("cropMovement", () => {
+  it.each([
+    [4000, 3000, undefined, { horizontal: false, vertical: false }],
+    [4000, 3000, 1, { horizontal: true, vertical: false }],
+    [3000, 4000, 16 / 9, { horizontal: false, vertical: true }],
+    [1600, 900, 16 / 9, { horizontal: false, vertical: false }],
+  ])("only enables axes with crop overflow for %dx%d", (width, height, ratio, expected) => {
+    expect(cropMovement(width, height, ratio)).toEqual(expected);
   });
 });

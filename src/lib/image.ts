@@ -13,6 +13,7 @@ export function outputDimensions(width: number, height: number, longestSide: num
 }
 
 export type CropRect = { x: number; y: number; width: number; height: number };
+export type CropMovement = { horizontal: boolean; vertical: boolean };
 
 function clamp(value: number) {
   return Math.min(1, Math.max(0, value));
@@ -44,6 +45,19 @@ export function cropRect(
     y: (height - cropHeight) * clamp(focusY),
     width: cropWidth,
     height: cropHeight,
+  };
+}
+
+/**
+ * 指定比率へ切り抜くとき、実際に構図を動かせる方向を返す。
+ * たとえば横長の画像を正方形にする場合は左右だけに余白があるため、縦位置を変えても
+ * 結果は変わらない。この情報を UI に渡し、効果のない位置スライダーを表示しない。
+ */
+export function cropMovement(width: number, height: number, aspectRatio?: number): CropMovement {
+  const crop = cropRect(width, height, aspectRatio);
+  return {
+    horizontal: crop.width < width,
+    vertical: crop.height < height,
   };
 }
 

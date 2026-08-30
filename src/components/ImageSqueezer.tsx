@@ -3,9 +3,10 @@
 
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import JsBarcode from "jsbarcode";
-import { FileDown } from "lucide-react";
+// カタログ全体を読み込まない個別 import。Next.js の初期コンパイルと配信サイズを抑える。
+import { DownloadSimpleIcon } from "@phosphor-icons/react/dist/csr/DownloadSimple";
 import { type ChangeEvent, useEffect, useRef, useState } from "react";
-import { cropRect, formatBytes, outputDimensions } from "@/lib/image";
+import { cropMovement, cropRect, formatBytes, outputDimensions } from "@/lib/image";
 
 type Format = "image/webp" | "image/jpeg" | "image/png";
 type Output = { blob: Blob; url: string; width: number; height: number };
@@ -157,6 +158,13 @@ export default function ImageSqueezer() {
   const previewRatio =
     activeRatio ??
     (originalSize.width && originalSize.height ? originalSize.width / originalSize.height : 4 / 3);
+  // 比率が一致している方向は切り抜き範囲に余りがなく、構図を動かしても出力は変化しない。
+  // その軸を UI から外すことで「位置を変えたのに反映されない」状態を防ぐ。
+  const positionMovement =
+    originalSize.width && originalSize.height
+      ? cropMovement(originalSize.width, originalSize.height, activeRatio)
+      : { horizontal: false, vertical: false };
+  const canAdjustPosition = positionMovement.horizontal || positionMovement.vertical;
 
   // 入力画像か出力設定が変わるたびに、ブラウザ内 Canvas で次のプレビュー Blob を作る。
   // 送信 API は使わず、この effect と Canvas API だけで完結させるため画像は端末外へ出ない。
@@ -247,7 +255,15 @@ export default function ImageSqueezer() {
   );
 
   function processing() {
-    if (file) setStatus("processing");
+    if (!file) return;
+    setStatus("processing");
+    setMessage("");
+  }
+  function updateFocus(next: Focus | ((current: Focus) => Focus)) {
+    // 状態更新で useEffect が再変換を開始し、同時に UI は処理中へ遷移する。
+    // input とドラッグの両方が同じ経路を通るため、位置変更の反映タイミングを揃えられる。
+    setFocus(next);
+    processing();
   }
   function choose(nextFile?: File) {
     if (!nextFile) return;
@@ -303,7 +319,7 @@ export default function ImageSqueezer() {
     processing();
   }
   function beginCrop(event: React.PointerEvent<HTMLDivElement>) {
-    if (!file || !activeRatio) return;
+    if (!file || !activeRatio || !canAdjustPosition) return;
     // 開始地点と開始時の焦点をセットで保持し、移動量から絶対的な焦点を再計算する。
     // Pointer Capture により、ポインターが枠外へ出てもドラッグ終了までイベントを受け取れる。
     dragStart.current = { x: event.clientX, y: event.clientY, focus };
@@ -313,13 +329,17 @@ export default function ImageSqueezer() {
   function moveCrop(event: React.PointerEvent<HTMLDivElement>) {
     if (!dragStart.current) return;
     const bounds = event.currentTarget.getBoundingClientRect();
-    setFocus({
+    updateFocus({
       // 画像を右へドラッグしたときは表示する画像の位置を左へずらすため、移動量を引く。
       // clamp により、切り抜き範囲が元画像の外へ出ることはない。
-      x: clamp(dragStart.current.focus.x - (event.clientX - dragStart.current.x) / bounds.width),
-      y: clamp(dragStart.current.focus.y - (event.clientY - dragStart.current.y) / bounds.height),
+      // 余白がない方向は元の値を保ち、操作結果とプレビューの差を作らない。
+      x: positionMovement.horizontal
+        ? clamp(dragStart.current.focus.x - (event.clientX - dragStart.current.x) / bounds.width)
+        : dragStart.current.focus.x,
+      y: positionMovement.vertical
+        ? clamp(dragStart.current.focus.y - (event.clientY - dragStart.current.y) / bounds.height)
+        : dragStart.current.focus.y,
     });
-    processing();
   }
   function endCrop() {
     dragStart.current = null;
@@ -425,7 +445,7 @@ export default function ImageSqueezer() {
           ) : (
             <div className="min-h-[390px] sm:min-h-[430px]">
               <div
-                className={`relative grid w-full max-h-[500px] touch-none place-items-center overflow-hidden bg-[#e9ebff] ${isCropping ? "cursor-grabbing" : "cursor-grab"}`}
+                className={`relative grid w-full max-h-[500px] touch-none place-items-center overflow-hidden bg-[#e9ebff] ${canAdjustPosition ? (isCropping ? "cursor-grabbing" : "cursor-grab") : "cursor-default"}`}
                 style={{ aspectRatio: previewRatio }}
                 onPointerDown={beginCrop}
                 onPointerMove={moveCrop}
@@ -452,7 +472,7 @@ export default function ImageSqueezer() {
                   <span className="absolute inset-x-0 top-1/3 h-px bg-white/80" />
                   <span className="absolute inset-x-0 top-2/3 h-px bg-white/80" />
                 </div>
-                {activeRatio && (
+                {activeRatio && canAdjustPosition && (
                   <span className="absolute bottom-3 right-3 inline-flex items-center gap-1.5 bg-[#1010ee] px-2 py-1.5 text-[0.62rem] font-bold text-white">
                     <Icon name="crop" />
                     DRAG TO POSITION
@@ -495,16 +515,18 @@ export default function ImageSqueezer() {
               ))}
             </div>
           </fieldset>
-          {file && activeRatio && (
+          {file && activeRatio && canAdjustPosition && (
             <fieldset className="m-0 border-0 border-t border-[#aebcff] py-4">
               <legend className="mb-3 flex items-center justify-between text-[0.66rem] font-bold tracking-[0.08em] text-[#1010ee]">
-                切り抜き位置{" "}
+                <span>切り抜き位置</span>
+                <span className="ml-auto mr-3 text-[#ee00e8]">
+                  X {Math.round(focus.x * 100)} / Y {Math.round(focus.y * 100)}
+                </span>
                 <button
                   type="button"
                   className="inline-flex items-center gap-1 text-[0.65rem] font-bold text-[#ee00e8] hover:text-[#1010ee] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1010ee]"
                   onClick={() => {
-                    setFocus({ x: 0.5, y: 0.5 });
-                    processing();
+                    updateFocus({ x: 0.5, y: 0.5 });
                   }}
                   aria-label="切り抜き位置を中央に戻す"
                 >
@@ -512,34 +534,44 @@ export default function ImageSqueezer() {
                   中央へ
                 </button>
               </legend>
-              <label className="mt-2 grid grid-cols-[20px_1fr] items-center gap-2 text-[0.65rem] font-semibold text-[#1010ee]">
-                横
-                <input
-                  className="w-full accent-[#1010ee]"
-                  type="range"
-                  min="0"
-                  max="100"
-                  value={Math.round(focus.x * 100)}
-                  onChange={(event) => {
-                    setFocus((current) => ({ ...current, x: Number(event.target.value) / 100 }));
-                    processing();
-                  }}
-                />
-              </label>
-              <label className="mt-2 grid grid-cols-[20px_1fr] items-center gap-2 text-[0.65rem] font-semibold text-[#1010ee]">
-                縦
-                <input
-                  className="w-full accent-[#1010ee]"
-                  type="range"
-                  min="0"
-                  max="100"
-                  value={Math.round(focus.y * 100)}
-                  onChange={(event) => {
-                    setFocus((current) => ({ ...current, y: Number(event.target.value) / 100 }));
-                    processing();
-                  }}
-                />
-              </label>
+              {positionMovement.horizontal && (
+                <label className="mt-2 grid grid-cols-[20px_1fr] items-center gap-2 text-[0.65rem] font-semibold text-[#1010ee]">
+                  横
+                  <input
+                    className="w-full accent-[#1010ee]"
+                    type="range"
+                    min="0"
+                    max="100"
+                    value={Math.round(focus.x * 100)}
+                    aria-valuetext={`横位置 ${Math.round(focus.x * 100)} パーセント`}
+                    onInput={(event) =>
+                      updateFocus((current) => ({
+                        ...current,
+                        x: Number(event.currentTarget.value) / 100,
+                      }))
+                    }
+                  />
+                </label>
+              )}
+              {positionMovement.vertical && (
+                <label className="mt-2 grid grid-cols-[20px_1fr] items-center gap-2 text-[0.65rem] font-semibold text-[#1010ee]">
+                  縦
+                  <input
+                    className="w-full accent-[#1010ee]"
+                    type="range"
+                    min="0"
+                    max="100"
+                    value={Math.round(focus.y * 100)}
+                    aria-valuetext={`縦位置 ${Math.round(focus.y * 100)} パーセント`}
+                    onInput={(event) =>
+                      updateFocus((current) => ({
+                        ...current,
+                        y: Number(event.currentTarget.value) / 100,
+                      }))
+                    }
+                  />
+                </label>
+              )}
             </fieldset>
           )}
           <fieldset className="m-0 border-0 border-t border-[#aebcff] py-4">
@@ -753,10 +785,10 @@ export default function ImageSqueezer() {
                   className="inline-flex min-h-[51px] items-center justify-center gap-2 bg-[#1010ee] px-4 text-[0.76rem] font-extrabold text-white transition-colors hover:bg-[#0808c8] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1010ee] sm:col-start-3 sm:row-span-2"
                   onClick={download}
                 >
-                  <FileDown
+                  <DownloadSimpleIcon
                     aria-hidden="true"
-                    className="size-[1.15rem] shrink-0"
-                    strokeWidth={2.25}
+                    className="size-5 shrink-0"
+                    weight="bold"
                   />
                   ダウンロード
                 </button>
