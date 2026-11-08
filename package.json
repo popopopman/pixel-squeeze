@@ -20,17 +20,17 @@
     "react-dom": "19.3.1"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "4.3.3",
-    "@types/node": "^22",
+    "@tailwindcss/postcss": "4.3.4",
+    "@types/node": "^26",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "eslint": "^9",
-    "eslint-config-next": "16.3.0",
+    "eslint": "^10",
+    "eslint-config-next": "16.4.5",
     "eslint-config-prettier": "^10.1.8",
-    "prettier": "^3.6.2",
-    "tailwindcss": "4.3.3",
-    "typescript": "^5",
-    "vitest": "^3.2.4"
+    "prettier": "^3.9.10",
+    "tailwindcss": "4.3.4",
+    "typescript": "^7",
+    "vitest": "^5.1.0"
   },
   "packageManager": "pnpm@11.21.0"
 }
